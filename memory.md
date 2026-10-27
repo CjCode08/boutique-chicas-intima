@@ -26,7 +26,7 @@
 - [x] Gestión de Variantes (tallas, colores, SKU, umbral y stock por variante).
 - [x] Panel de Auditoría (`inventory_logs`) para visualizar ingresos, ajustes e historial.
 - [x] Mensajes de error de creación de categorías visibles dentro del formulario y opción para reintentar la conexión.
-- [x] Añadido campo de precio mayorista opcional en USD (sin mínimo de unidades) y migración SQL correspondiente.
+- [x] Añadidos precios unitario, promocional (3–11 piezas) y al mayor (12+ piezas) por producto, con migración SQL correspondiente.
 - [x] Documentada conexión MCP de Supabase a VS Code con acceso de solo lectura inicial.
 
 ### Fase 2: Catálogo Ecommerce & Pedidos WhatsApp
@@ -54,8 +54,9 @@
 ## Decisiones y Elementos Descartados
 *(Registrar aquí cualquier función o enfoque que se decida no implementar para no reconsiderarlo a futuro)*
 - La tabla `products` no contiene costo unitario; el indicador de valor de inventario usa el precio de venta (`base_price_usd`) y se etiqueta como tal.
-- El precio mayorista (`wholesale_price_usd`) es opcional, sin mínimo de compra; el usuario puede decidir cómo aplicarlo en operaciones futuras.
-- Ejecutar la migración `supabase/migrations/20261026180000_add_wholesale_price.sql` en Supabase antes de crear/actualizar productos con precio mayorista.
+- Los precios del producto son `base_price_usd` para 1–2 piezas, `promotional_price_3_11_usd` para 3–11 piezas y `wholesale_price_usd` para 12 o más piezas, cuando estén configurados.
+- Ejecutar la migración `supabase/migrations/20261027131500_add_promotional_and_wholesale_price_tiers.sql` en Supabase antes de crear/actualizar productos con precios por cantidad.
+- El catálogo, carrito, vendedores y POS siguen pendientes; la aplicación todavía no calcula ni cobra automáticamente el precio por cantidad en una compra.
 - Los errores al crear categorías antes se enviaban al mensaje detrás del modal; ahora se muestran en el formulario. Errores de permisos pueden requerir políticas RLS de lectura/escritura.
 - La UI aún no tiene flujo de inicio de sesión; si las escrituras exigen RLS `authenticated`, primero hay que implementar inicio de sesión y validar `profiles.role` antes de abrir escrituras del panel.
 
@@ -69,5 +70,3 @@
 - Variantes en `product_variants`; stock en `stock_quantity`; umbral por SKU en `min_stock_alert`.
 - Precio base en `products.base_price_usd`; conversión a bolívares con `exchange_rates.rate_ves` activo.
 - Movimientos usan `inventory_logs.type`, `quantity_changed`, `previous_stock` y `new_stock`; el stock inicial se registra como `ADDITION` y los cambios manuales como `ADJUSTMENT`.
-- La app usa `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`; las políticas RLS determinan permisos de lectura/escritura.
-- El MCP oficial de Supabase se conecta por HTTP/OAuth desde VS Code; mantenerlo acotado al `project_ref`, usar `read_only=true` al probar y revisar manualmente el SQL antes de otorgar escritura.

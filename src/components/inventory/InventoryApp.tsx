@@ -56,6 +56,7 @@ type ProductDraft = {
   category_id: string;
   description: string;
   base_price_usd: string;
+  promotional_price_3_11_usd: string;
   wholesale_price_usd: string;
 };
 
@@ -64,6 +65,7 @@ const emptyProduct: ProductDraft = {
   category_id: "",
   description: "",
   base_price_usd: "",
+  promotional_price_3_11_usd: "",
   wholesale_price_usd: "",
 };
 
@@ -102,10 +104,11 @@ function getErrorMessage(error: unknown) {
   return "Ocurrió un error inesperado.";
 }
 
-function isMissingWholesalePriceColumn(error: unknown) {
+function isMissingTierPriceColumn(error: unknown) {
   const message = getErrorMessage(error).toLocaleLowerCase();
   return (
-    message.includes("wholesale_price_usd") &&
+    (message.includes("wholesale_price_usd") ||
+      message.includes("promotional_price_3_11_usd")) &&
     (message.includes("schema cache") || message.includes("column"))
   );
 }
@@ -241,6 +244,11 @@ export default function InventoryApp({
               category_id: product.category_id ?? "",
               description: product.description ?? "",
               base_price_usd: String(product.base_price_usd),
+              promotional_price_3_11_usd:
+                product.promotional_price_3_11_usd === null ||
+                typeof product.promotional_price_3_11_usd === "undefined"
+                  ? ""
+                  : String(product.promotional_price_3_11_usd),
               wholesale_price_usd:
                 product.wholesale_price_usd === null ||
                 typeof product.wholesale_price_usd === "undefined"
@@ -407,6 +415,11 @@ export default function InventoryApp({
       category_id: product.category_id ?? "",
       description: product.description ?? "",
       base_price_usd: String(product.base_price_usd),
+      promotional_price_3_11_usd:
+        product.promotional_price_3_11_usd === null ||
+        typeof product.promotional_price_3_11_usd === "undefined"
+          ? ""
+          : String(product.promotional_price_3_11_usd),
       wholesale_price_usd:
         product.wholesale_price_usd === null ||
         typeof product.wholesale_price_usd === "undefined"
@@ -462,7 +475,7 @@ export default function InventoryApp({
     setError("");
     setProductSaveAlert("");
     setNotice("");
-    let wholesaleColumnUnavailable = false;
+    let tierPriceColumnsUnavailable = false;
     let uploadedImagePath: string | null = null;
     let uploadedImageAttached = false;
 
@@ -474,6 +487,9 @@ export default function InventoryApp({
         description: productDraft.description.trim() || null,
         base_price_usd: Number(productDraft.base_price_usd),
       };
+      const promotionalPrice = productDraft.promotional_price_3_11_usd
+        ? Number(productDraft.promotional_price_3_11_usd)
+        : null;
       const wholesalePrice = productDraft.wholesale_price_usd
         ? Number(productDraft.wholesale_price_usd)
         : null;
@@ -486,6 +502,13 @@ export default function InventoryApp({
       }
 
       if (
+        promotionalPrice !== null &&
+        (!Number.isFinite(promotionalPrice) || promotionalPrice < 0)
+      ) {
+        throw new Error("El precio de promoción debe ser un monto igual o mayor que cero.");
+      }
+
+      if (
         wholesalePrice !== null &&
         (!Number.isFinite(wholesalePrice) || wholesalePrice < 0)
       ) {
@@ -494,6 +517,7 @@ export default function InventoryApp({
 
       const productValues = {
         ...baseProductValues,
+        promotional_price_3_11_usd: promotionalPrice,
         wholesale_price_usd: wholesalePrice,
       };
       const uploadProductImage = async () => {
@@ -577,8 +601,9 @@ export default function InventoryApp({
 
         if (
           updateError &&
+          promotionalPrice === null &&
           wholesalePrice === null &&
-          isMissingWholesalePriceColumn(updateError)
+          isMissingTierPriceColumn(updateError)
         ) {
           const fallbackResult = await supabase
             .from("products")
@@ -589,7 +614,7 @@ export default function InventoryApp({
             )
             .eq("id", editingProduct.id);
           updateError = fallbackResult.error;
-          wholesaleColumnUnavailable = !updateError;
+          tierPriceColumnsUnavailable = !updateError;
         }
 
         if (updateError) throw updateError;
@@ -656,9 +681,9 @@ export default function InventoryApp({
 
         setNotice(
           validVariants.length > 0
-            ? `Producto actualizado y ${validVariants.length} variante${validVariants.length === 1 ? "" : "s"} agregada${validVariants.length === 1 ? "" : "s"} correctamente.${wholesaleColumnUnavailable ? " Aplica la migración para habilitar el precio mayorista." : ""}`
-            : wholesaleColumnUnavailable
-              ? "Producto actualizado. Aplica la migración de precio mayorista para habilitar ese campo."
+            ? `Producto actualizado y ${validVariants.length} variante${validVariants.length === 1 ? "" : "s"} agregada${validVariants.length === 1 ? "" : "s"} correctamente.${tierPriceColumnsUnavailable ? " Aplica la migración para habilitar los precios por cantidad." : ""}`
+            : tierPriceColumnsUnavailable
+              ? "Producto actualizado. Aplica la migración para habilitar los precios por cantidad."
               : "Los datos del producto se actualizaron correctamente.",
         );
       } else {
@@ -674,8 +699,9 @@ export default function InventoryApp({
 
         if (
           insertProductError &&
+          promotionalPrice === null &&
           wholesalePrice === null &&
-          isMissingWholesalePriceColumn(insertProductError)
+          isMissingTierPriceColumn(insertProductError)
         ) {
           const fallbackInsertValues: Database["public"]["Tables"]["products"]["Insert"] =
             imageUrl
@@ -688,7 +714,7 @@ export default function InventoryApp({
             .single();
           product = fallbackResult.data;
           insertProductError = fallbackResult.error;
-          wholesaleColumnUnavailable = !insertProductError;
+          tierPriceColumnsUnavailable = !insertProductError;
         }
 
         if (insertProductError) throw insertProductError;
@@ -765,8 +791,8 @@ export default function InventoryApp({
           }
         }
         setNotice(
-          wholesaleColumnUnavailable
-            ? "Producto y variantes guardados. Aplica la migración de precio mayorista para habilitar ese campo."
+          tierPriceColumnsUnavailable
+            ? "Producto y variantes guardados. Aplica la migración para habilitar los precios por cantidad."
             : "Producto y variantes guardados correctamente.",
         );
       }
@@ -775,8 +801,8 @@ export default function InventoryApp({
       await loadInventory();
     } catch (saveError) {
       let message = getErrorMessage(saveError);
-      if (isMissingWholesalePriceColumn(saveError)) {
-        message = "Supabase aún no tiene la columna del precio mayorista. Ejecuta supabase/migrations/20261026180000_add_wholesale_price.sql en el editor SQL de Supabase y vuelve a intentar.";
+      if (isMissingTierPriceColumn(saveError)) {
+        message = "Supabase aún no tiene las columnas de precios por cantidad. Ejecuta supabase/migrations/20261027131500_add_promotional_and_wholesale_price_tiers.sql en el editor SQL de Supabase y vuelve a intentar.";
       } else if (
         productImageFile &&
         message.toLocaleLowerCase().includes("image_url") &&
@@ -950,7 +976,7 @@ export default function InventoryApp({
             <Warehouse size={21} strokeWidth={2.2} />
           </span>
           <span className="brand-copy">
-            <strong>Chicas Íntima</strong>
+            <strong>Boutique Chicas Íntima</strong>
             <span>Gestión de inventario</span>
           </span>
         </a>
@@ -1359,7 +1385,29 @@ export default function InventoryApp({
                   </div>
                 </label>
                 <label className="field">
-                  <span>Precio al mayor (USD)</span>
+                  <span>Precio de promoción (3–11 piezas, USD)</span>
+                  <div className="input-prefix">
+                    <span>$</span>
+                    <input
+                      min="0"
+                      onChange={(event) =>
+                        setProductDraft({
+                          ...productDraft,
+                          promotional_price_3_11_usd: event.target.value,
+                        })
+                      }
+                      placeholder="0"
+                      step="0.01"
+                      type="number"
+                      value={productDraft.promotional_price_3_11_usd}
+                    />
+                  </div>
+                  <small className="field-hint">
+                    Precio por pieza para compras de 3 a 11 unidades del mismo producto.
+                  </small>
+                </label>
+                <label className="field">
+                  <span>Precio al mayor (12 piezas o más, USD)</span>
                   <div className="input-prefix">
                     <span>$</span>
                     <input
@@ -1370,14 +1418,14 @@ export default function InventoryApp({
                           wholesale_price_usd: event.target.value,
                         })
                       }
-                      placeholder="Opcional"
+                      placeholder="0"
                       step="0.01"
                       type="number"
                       value={productDraft.wholesale_price_usd}
                     />
                   </div>
                   <small className="field-hint">
-                    Sin mínimo de unidades requerido.
+                    Precio por pieza para compras de 12 unidades o más del mismo producto.
                   </small>
                 </label>
                 <label className="field field-full">
@@ -1981,7 +2029,7 @@ function ProductsSection({
       ) : (
         <div className="table-scroll">
           <table className="data-table products-table">
-            <thead><tr><th>Producto</th><th>Categoría</th><th>Precio unitario</th><th>Precio al mayor</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Producto</th><th>Categoría</th><th>Precio unitario</th><th>Precio 3–11 uds.</th><th>Precio mayorista (12+)</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
               {products.map((product) => (
                 <tr key={product.id}>
@@ -2003,6 +2051,7 @@ function ProductsSection({
                   </td>
                   <td>{categoryNameById.get(product.category_id ?? "") ?? "Sin categoría"}</td>
                   <td><span className="table-strong">{currencyFormat.format(product.base_price_usd)}</span>{exchangeRate && <span className="table-subtext">{vesFormat.format(product.base_price_usd * exchangeRate)}</span>}</td>
+                  <td>{product.promotional_price_3_11_usd === null || typeof product.promotional_price_3_11_usd === "undefined" ? <span>—</span> : <><span className="table-strong">{currencyFormat.format(product.promotional_price_3_11_usd)}</span>{exchangeRate && <span className="table-subtext">{vesFormat.format(product.promotional_price_3_11_usd * exchangeRate)}</span>}</>}</td>
                   <td>{product.wholesale_price_usd === null || typeof product.wholesale_price_usd === "undefined" ? <span>—</span> : <><span className="table-strong">{currencyFormat.format(product.wholesale_price_usd)}</span>{exchangeRate && <span className="table-subtext">{vesFormat.format(product.wholesale_price_usd * exchangeRate)}</span>}</>}</td>
                   <td><span className={`status-pill${product.is_active ? "" : " status-pill-off"}`}><span />{product.is_active ? "Activo" : "Inactivo"}</span></td>
                   <td>

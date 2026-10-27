@@ -14,6 +14,7 @@ type ProductRow = {
   description: string | null;
   image_url: string | null;
   base_price_usd: number;
+  promotional_price_3_11_usd: number | null;
   wholesale_price_usd: number | null;
   is_active: boolean | null;
   created_at: string;
@@ -77,6 +78,7 @@ export type Database = {
           description?: string | null;
           image_url?: string | null;
           base_price_usd: number;
+          promotional_price_3_11_usd?: number | null;
           wholesale_price_usd?: number | null;
           is_active?: boolean;
           created_at?: string;
@@ -89,6 +91,7 @@ export type Database = {
           description?: string | null;
           image_url?: string | null;
           base_price_usd?: number;
+          promotional_price_3_11_usd?: number | null;
           wholesale_price_usd?: number | null;
           is_active?: boolean;
           created_at?: string;

@@ -23,31 +23,15 @@ La clave `SUPABASE_SERVICE_ROLE_KEY`, si existe, nunca debe exponerse al navegad
 El panel conecta con estas tablas y columnas del esquema SQL del proyecto:
 
 - `categories`: `id`, `name`, `slug`.
-- `products`: `id`, `category_id`, `name`, `description`, `image_url`, `base_price_usd`, `is_active`.
+- `products`: `id`, `category_id`, `name`, `description`, `image_url`, `base_price_usd`, `promotional_price_3_11_usd`, `wholesale_price_usd`, `is_active`.
 - `product_variants`: `id`, `product_id`, `sku`, `size`, `color`, `stock_quantity`, `min_stock_alert`.
 - `inventory_logs`: `variant_id`, `type`, `quantity_changed`, `previous_stock`, `new_stock`, `notes`, `created_at`.
 - `exchange_rates`: `rate_ves`, `is_active`, `created_at`.
 
-La migración `supabase/migrations/20261026180000_add_wholesale_price.sql` agrega `products.wholesale_price_usd`, un precio mayorista opcional en USD, sin mínimo de compra. Ejecuta este SQL en Supabase para habilitar ese campo. Mientras no esté aplicada, los productos sin precio mayorista se pueden registrar y editar; si se intenta asignar un precio mayorista, la aplicación mostrará un error que indica la migración necesaria. Las filas existentes quedan con el precio mayorista en `NULL` hasta que se indique uno.
+La migración `supabase/migrations/20261027131500_add_promotional_and_wholesale_price_tiers.sql` agrega `products.promotional_price_3_11_usd` para el precio promocional de 3 a 11 piezas y configura `products.wholesale_price_usd` para el precio al mayor desde 12 piezas, ambos opcionales y expresados por unidad en USD. `base_price_usd` es el precio unitario para 1 o 2 piezas. Ejecuta el SQL de esa migración en Supabase para habilitar los tres campos. Los precios guardados actualmente en `wholesale_price_usd` se conservan; revisa esos valores y reasígnalos según corresponda al nuevo esquema.
+
+El catálogo, el carrito, la interfaz de vendedores y el punto de venta aún son pantallas de preparación; por tanto, el sistema todavía no procesa compras ni calcula automáticamente el precio en un pedido. Esta configuración deja guardados los tres precios. En el futuro flujo de venta, las unidades de todas las variantes (tallas/colores) del mismo producto deberán sumarse para aplicar el precio unitario (1–2), de promoción (3–11) o al mayor (12+).
 
 La migración `supabase/migrations/20261026221800_add_product_image_url.sql` agrega `products.image_url`. Aplícala antes de subir imágenes. El formulario permite seleccionar JPG, PNG o WebP de hasta 5 MB; los archivos se almacenan en el bucket `products` y la URL queda asociada al producto. Para que las imágenes se puedan ver, configura ese bucket como público y permite las escrituras necesarias mediante políticas de Storage. La app solo usa la clave anon en el navegador; nunca expongas una service role key.
 
-El dashboard consulta los datos reales y presenta estados vacíos o errores de conexión explícitos. Permite crear productos con sus variantes, stock inicial e imagen, crear categorías (generando su `slug`), editar/desactivar productos, agregar variantes nuevas a productos existentes, ajustar existencias y consultar la auditoría. Las variantes agregadas desde la edición reciben su stock inicial y dejan un movimiento de auditoría; las variantes ya registradas no se modifican desde ese formulario. Los precios unitario y mayorista muestran su equivalente en VES cuando hay una tasa activa. El esquema actual no contiene costo unitario, por lo que el valor del inventario se calcula al precio unitario.
-
-La creación de categorías muestra errores de Supabase en el formulario. Si aparece una denegación de permisos, revisa las políticas RLS de lectura e inserción: no habilites escrituras anónimas en producción. La interfaz todavía no incluye pantalla de inicio de sesión; por eso, si RLS exige `authenticated`, primero hay que implementar la sesión de administrador y autorizar su perfil antes de poder escribir desde el panel.
-
-### Conectar Supabase por MCP desde VS Code
-
-1. En VS Code, abre la paleta (`Ctrl+Shift+P`) y ejecuta **MCP: Add Server**.
-2. Selecciona **HTTP**, pega `https://mcp.supabase.com/mcp?project_ref=TU_PROJECT_REF&read_only=true&features=database,docs` y confirma.
-3. Inicia sesión en Supabase cuando VS Code lo solicite, selecciona la organización del proyecto y revisa/acepta la conexión.
-4. Verifica primero con una consulta de lectura, por ejemplo: “Usa Supabase MCP para listar las tablas; no ejecutes escrituras”.
-5. Para cambios de esquema, quita `&read_only=true` solo cuando lo necesites; mantén las aprobaciones manuales y revisa el SQL de cada operación.
-
-`TU_PROJECT_REF` es la parte anterior a `.supabase.co` en `NEXT_PUBLIC_SUPABASE_URL`. El MCP usa el inicio de sesión OAuth de Supabase; no pegues `SUPABASE_SERVICE_ROLE_KEY`, contraseñas ni tokens en el chat o en el repositorio. La configuración también puede añadirse a `.vscode/mcp.json`; VS Code y Supabase documentan los pasos y opciones de seguridad en [VS Code](https://code.visualstudio.com/docs/agent-customization/mcp-servers) y [Supabase](https://supabase.com/docs/guides/ai-tools/mcp).
-
-## Validación
-
-- `npm run lint`
-- `npx tsc --noEmit`
-- `npm run build`
+El dashboard consulta los datos reales y presenta estados vacíos o errores de conexión explícitos. Permite crear productos con sus variantes, stock inicial e imagen, crear categorías (generando su `slug`), editar/desactivar productos, agregar variantes nuevas a productos existentes, ajustar existencias y consultar la auditoría. Las variantes agregadas desde la edición reciben su stock inicial y dejan un movimiento de auditoría; las variantes ya registradas no se modifican desde ese formulario. Los tres precios muestran su equivalente en VES cuando hay una tasa activa. El esquema actual no contiene costo unitario, por lo que el valor del inventario se calcula al precio unitario.
